@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ice-sense-edge-service
+  namespace: ice-edge-system
+  labels:
+    app.kubernetes.io/name: ice-sense
+    app.kubernetes.io/component: inference-engine
+    app.kubernetes.io/part-of: habitat-life-support
+spec:
+  replicas: 1 # Edge appliances typically run single-instance with local hardware binding
+  strategy:
+    type: Recreate # Clean port handoff on edge hardware
+  selector:
+    matchLabels:
+      app: ice-sense-edge
+  template:
+    metadata:
+      labels:
+        app: ice-sense-edge
+    spec:
+      # Pin to dedicated edge nodes with physical sensor gateway connectivity
+      nodeSelector:
+        node-role.kubernetes.io/edge: "true"
+      containers:
+        - name: inference-service
+          image: ice-sense/edge-api:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http-api
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "192Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: local-storage-spool
+              mountPath: /data/spool
+            - name: tmp-dir
+              mountPath: /tmp
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          env:
+            - name: EDGE_NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: PYTHONUNBUFFERED
+              value: "1"
+      volumes:
+        - name: local-storage-spool
+          hostPath:
+            path: /var/lib/ice-sense/spool
+            type: DirectoryOrCreate
+        - name: tmp-dir
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ice-sense-edge-service
+  namespace: ice-edge-system
+spec:
+  type: ClusterIP
+  selector:
+    app: ice-sense-edge
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+      name: http

@@ -1,0 +1,6 @@
+{
+  "name": "ICE-Sense Edge Architecture & MVP",
+  "description": "Commercial Edge-First multimodal psychological monitoring system for isolated, confined, and extreme environments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
